@@ -1,0 +1,130 @@
+---
+title: "ADM"
+author: "Błażej Orzechowski"
+date: "`r Sys.Date()`"
+output: 
+  html_document:
+    toc: true
+    toc_float: true
+---
+
+## Libraries
+
+```{r setup, echo=TRUE, message=FALSE, warning=FALSE, cache=T}
+knitr::opts_chunk$set(echo = TRUE, warning = FALSE, message = FALSE)
+library(ggplot2)
+library(tidyr)
+library(dplyr)
+library(tibble)
+library(plotly)
+library(ggcorrplot)
+
+set.seed(1)
+```
+
+## Import data
+
+```{r}
+data <- read.csv("data/mp_batteries.csv", sep=",", header=TRUE) %>%
+  drop_na()
+
+knitr::kable(head(data, 10))
+```
+
+-   **Battery.ID**: `character` - Unique battery identifier\
+-   **Battery.Formula**: `character` - Chemical formula of battery\
+-   **Working.Ion**: `character` - Primary working ion\
+-   **Formula.Charge**: `character` - Formula in charged state\
+-   **Formula.Discharge**: `character` - Formula in discharged state\
+-   **Max.Delta.Volume**: `numeric` - Max volume change (%)\
+-   **Average.Voltage**: `numeric` - Average operating voltage\
+-   **Gravimetric.Capacity**: `numeric` - Capacity per unit mass\
+-   **Volumetric.Capacity**: `numeric` - Capacity per unit volume\
+-   **Gravimetric.Energy**: `numeric` - Energy per unit mass\
+-   **Volumetric.Energy**: `numeric` - Energy per unit volume\
+-   **Atomic.Fraction.Charge**: `numeric` - Atomic fraction (charged)\
+-   **Atomic.Fraction.Discharge**: `numeric` - Atomic fraction (discharged)\
+-   **Stability.Charge**: `numeric` - Stability in charged state\
+-   **Stability.Discharge**: `numeric` - Stability in discharged state\
+-   **Steps**: `integer` - Number of transition steps\
+-   **Max.Voltage.Step**: `numeric` - Largest voltage difference
+
+## Basic statistics
+
+```{r}
+data %>% summarise(n())
+
+data %>%
+  summarise(across(where(is.numeric),
+                   list(mean = ~mean(.),
+                        median = ~median(.),
+                        min = ~min(.),
+                        max = ~max(.),
+                        sd = ~sd(.),
+                        n_unique = ~n_distinct(.)),
+                   .names = "{col}_{fn}")) %>%
+  pivot_longer(everything(), 
+               names_to = c("statistic", "column"),
+               names_sep = "_",
+               values_to = "value") %>%
+  pivot_wider(names_from = column, values_from = value) %>%
+  knitr::kable()
+```
+
+## Data distributions
+
+```{r}
+data %>% 
+  select(where(is.numeric)) %>%
+  gather(key = "attribute", value = "value") %>%
+  ggplot(aes(x = value)) +
+  geom_histogram(bins = 30, fill = "lightblue", color = "black") +
+  facet_wrap(~attribute, scales = "free") +
+  theme_minimal() +
+  labs(title = "Distribution of values", x = "Value", y = "Frequency")
+
+```
+
+## Correlations analysis
+
+```{r}
+numeric_columns <- data %>% select(where(is.numeric))
+cor_matrix <- cor(numeric_columns, use = "complete.obs")
+
+cor_data <- as.data.frame(as.table(cor_matrix))
+
+# Interaktywny wykres
+plot_ly(
+  data = cor_data,
+  x = ~Var1,
+  y = ~Var2,
+  z = ~Freq,
+  zmin = -1,
+  zmax = 1,
+  type = "heatmap",
+  colors = c("blue", "white", "red")
+) %>%
+  layout(
+    title = "Correlation matrix",
+    xaxis = list(title = ""),
+    yaxis = list(title = "")
+  )
+```
+
+## Trends
+
+```{r}
+ggplot(data, aes(x = Gravimetric.Capacity, y = Atomic.Fraction.Discharge)) +
+  geom_point(alpha = 0.6, color = "blue") +
+  geom_smooth(method = "lm", se = FALSE, color = "red") +
+  facet_wrap(~ Working.Ion, scales = "free") +
+  scale_y_continuous(limits = c(0, 1)) +
+  scale_x_continuous(limits = c(0, 3000)) +
+  labs(
+    title = "Relationship between Gravimetric Capacity and Atomic Fraction Discharge",
+    x = "Gravimetric Capacity",
+    y = "Atomic Fraction Discharge"
+  ) +
+  theme_minimal()
+
+```
